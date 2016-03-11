@@ -802,8 +802,8 @@ function provision-master() {
 
       groupadd -f -r kube-cert
       ${PROXY_SETTING} DEBUG='${DEBUG}' ~/kube/make-ca-cert.sh \"${MASTER_IP}\" \"${EXTRA_SANS}\"
-      mkdir -p /opt/bin/
-      cp ~/kube/master/* /opt/bin/
+      mkdir -p /opt/kubernetes/bin/
+      cp ~/kube/master/* /opt/kubernetes/bin/
       service etcd start
       if ${NEED_RECONFIG_DOCKER}; then FLANNEL_NET=\"${FLANNEL_NET}\" KUBE_CONFIG_FILE=\"${KUBE_CONFIG_FILE}\" DOCKER_OPTS=\"${DOCKER_OPTS}\" ~/kube/reconfDocker.sh a; fi
       '" || {
@@ -880,8 +880,8 @@ function provision-node() {
 
     sudo -E -p '[sudo] password to start node: ' -- /bin/bash -ce '
       ${BASH_DEBUG_FLAGS}
-      mkdir -p /opt/bin/
-      cp ~/kube/minion/* /opt/bin
+      mkdir -p /opt/kubernetes/bin/
+      cp ~/kube/minion/* /opt/kubernetes/bin
       ${SERVICE_STARTS}
       if ${NEED_RECONFIG_DOCKER}; then KUBE_CONFIG_FILE=\"${KUBE_CONFIG_FILE}\" DOCKER_OPTS=\"${DOCKER_OPTS}\" ~/kube/reconfDocker.sh i; fi
       '" || {
@@ -981,9 +981,9 @@ function provision-masterandnode() {
 
       groupadd -f -r kube-cert
       ${PROXY_SETTING} DEBUG='${DEBUG}' ~/kube/make-ca-cert.sh \"${MASTER_IP}\" \"${EXTRA_SANS}\"
-      mkdir -p /opt/bin/
-      cp ~/kube/master/* /opt/bin/
-      cp ~/kube/minion/* /opt/bin/
+      mkdir -p /opt/kubernetes/bin/
+      cp ~/kube/master/* /opt/kubernetes/bin/
+      cp ~/kube/minion/* /opt/kubernetes/bin/
 
       service etcd start
       if ${NEED_RECONFIG_DOCKER}; then FLANNEL_NET=\"${FLANNEL_NET}\" KUBE_CONFIG_FILE=\"${KUBE_CONFIG_FILE}\" DOCKER_OPTS=\"${DOCKER_OPTS}\" ~/kube/reconfDocker.sh ai; fi
@@ -1029,7 +1029,7 @@ function kube-down() {
             service etcd stop
 
             rm -rf \
-              /opt/bin/etcd* \
+              /opt/kubernetes/bin/etcd* \
               /etc/init/etcd.conf \
               /etc/init.d/etcd \
               /etc/default/etcd
@@ -1058,8 +1058,8 @@ function kube-down() {
 
       ssh $SSH_OPTS -t "$i" "sudo -- /bin/bash -c '
         rm -f \
-          /opt/bin/kube* \
-          /opt/bin/flanneld \
+          /opt/kubernetes/bin/kube* \
+          /opt/kubernetes/bin/flanneld \
           /etc/init/kube* \
           /etc/init/flanneld.conf \
           /etc/init.d/kube* \
@@ -1126,9 +1126,9 @@ function push-master() {
           /etc/default/kube* \
           /etc/default/flanneld
         rm -f \
-          /opt/bin/etcd* \
-          /opt/bin/kube* \
-          /opt/bin/flanneld
+          /opt/kubernetes/bin/etcd* \
+          /opt/kubernetes/bin/kube* \
+          /opt/kubernetes/bin/flanneld
         rm -f /run/flannel/subnet.env
         rm -rf ~/kube
       '" || echo "Cleaning master ${i#*@} failed"
@@ -1175,8 +1175,8 @@ function push-node() {
         sudo -p '[sudo] stop the all process: ' -- /bin/bash -c '
           service flanneld stop
 
-          rm -f /opt/bin/kube* \
-            /opt/bin/flanneld
+          rm -f /opt/kubernetes/bin/kube* \
+            /opt/kubernetes/bin/flanneld
 
           rm -rf \
             /etc/init/kube* \
@@ -1235,7 +1235,7 @@ function kube-push() {
           service etcd stop
 
           rm -rf \
-            /opt/bin/etcd* \
+            /opt/kubernetes/bin/etcd* \
             /etc/init/etcd.conf \
             /etc/init.d/etcd \
             /etc/default/etcd
@@ -1253,8 +1253,8 @@ function kube-push() {
 
       ssh $SSH_OPTS -t "$i" "sudo -- /bin/bash -c '
         rm -f \
-          /opt/bin/kube* \
-          /opt/bin/flanneld
+          /opt/kubernetes/bin/kube* \
+          /opt/kubernetes/bin/flanneld
 
         rm -rf \
           /etc/init/kube* \
