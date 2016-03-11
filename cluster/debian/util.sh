@@ -254,7 +254,7 @@ ETCD_ADVERTISE_CLIENT_URLS="http://localhost:2379,http://localhost:4001,http://$
 #ETCD_PEER_KEY_FILE=""
 EOF
 
-    cat <<EOF >/usr/lib/systemd/system/etcd.service
+    cat <<EOF >/etc/systemd/system/etcd.service
 [Unit]
 Description=Etcd Server
 After=network.target
@@ -357,7 +357,7 @@ KUBE_APISERVER_OPTS="   \${KUBE_LOGTOSTDERR}             \\
                         \${KUBE_API_TLS_PRIVATE_KEY_FILE}"
 
 
-cat <<EOF >/usr/lib/systemd/system/kube-apiserver.service
+cat <<EOF >/etc/systemd/system/kube-apiserver.service
 [Unit]
 Description=Kubernetes API Server
 Documentation=https://github.com/kubernetes/kubernetes
@@ -399,7 +399,7 @@ EOF
                                     \${KUBE_CONTROLLER_MANAGER_ROOT_CA_FILE} \\
                                     \${KUBE_CONTROLLER_MANAGER_SERVICE_ACCOUNT_PRIVATE_KEY_FILE}"
 
-    cat <<EOF >/usr/lib/systemd/system/kube-controller-manager.service
+    cat <<EOF >/etc/systemd/system/kube-controller-manager.service
 [Unit]
 Description=Kubernetes Controller Manager
 Documentation=https://github.com/kubernetes/kubernetes
@@ -443,7 +443,7 @@ EOF
                             \${KUBE_MASTER}          \\
                             \${KUBE_SCHEDULER_ARGS}"
 
-    cat <<EOF >/usr/lib/systemd/system/kube-scheduler.service
+    cat <<EOF >/etc/systemd/system/kube-scheduler.service
 [Unit]
 Description=Kubernetes Scheduler
 Documentation=https://github.com/kubernetes/kubernetes
@@ -521,7 +521,7 @@ EOF
                         \${KUBE_ALLOW_PRIV}      \\
                         \${KUBELET_ARGS}"
 
-    cat <<EOF >/usr/lib/systemd/system/kubelet.service
+    cat <<EOF >/etc/systemd/system/kubelet.service
 [Unit]
 Description=Kubernetes Kubelet
 After=docker.service
@@ -566,7 +566,7 @@ EOF
                         \${NODE_HOSTNAME}    \\
                         \${KUBE_MASTER}"
 
-    cat <<EOF >/usr/lib/systemd/system/kube-proxy.service
+    cat <<EOF >/etc/systemd/system/kube-proxy.service
 [Unit]
 Description=Kubernetes Proxy
 After=network.target
@@ -599,7 +599,7 @@ FLANNEL_IP_MASQ="--ip-masq"
 FLANNEL_INTERFACE="--iface=${FLANNEL_INTERFACE}""
 EOF
 
-    cat <<EOF >/usr/lib/systemd/system/flannel.service
+    cat <<EOF >/etc/systemd/system/flannel.service
 [Unit]
 Description=Flanneld overlay address etcd agent
 After=network.target
