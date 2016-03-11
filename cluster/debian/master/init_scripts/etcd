@@ -56,11 +56,9 @@ ETCD_START="start-stop-daemon \
 --start \
 --background \
 --quiet \
---exec $ETCD \
+--exec /root/etcd.sh \
 --make-pidfile \
---pidfile $ETCD_PIDFILE \
--- $ETCD_OPTS \
->> $ETCD_LOGFILE 2>&1"
+--pidfile $ETCD_PIDFILE"
 
 ETCD_STOP="start-stop-daemon \
 --stop \
