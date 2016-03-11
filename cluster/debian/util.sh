@@ -272,6 +272,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable etcd
+    systemctl start etcd
 }
 
 # Create ~/kube/default/kube-apiserver with proper contents.
@@ -373,6 +374,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kube-apiserver
+    systemctl start kube-apiserver
 }
 
 # Create ~/kube/default/kube-controller-manager with proper contents.
@@ -415,6 +417,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kube-controller-manager
+    systemctl start kube-controller-manager
 }
 
 # Create ~/kube/default/kube-scheduler with proper contents.
@@ -459,6 +462,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kube-scheduler
+    systemctl start kube-scheduler
 }
 
 # Create ~/kube/default/kubelet with proper contents.
@@ -538,6 +542,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kubelet
+    systemctl start kubelet
 }
 
 # Create ~/kube/default/kube-proxy with proper contents.
@@ -582,6 +587,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kube-proxy
+    systemctl start kube-proxy
 }
 
 # Create ~/kube/default/flanneld with proper contents.
