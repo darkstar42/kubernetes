@@ -260,7 +260,7 @@ Description=Etcd Server
 After=network.target
 
 [Service]
-Type=simple
+Type=notify
 WorkingDirectory=${etcd_data_dir}
 EnvironmentFile=-/root/kube/cfg/etcd.conf
 # set GOMAXPROCS to number of processors
