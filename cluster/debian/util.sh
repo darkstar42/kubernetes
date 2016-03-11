@@ -800,10 +800,6 @@ function provision-master() {
     FLANNEL_OTHER_NET_CONFIG='${FLANNEL_OTHER_NET_CONFIG}' sudo -E -p '[sudo] password to start master: ' -- /bin/bash -ce '
       ${BASH_DEBUG_FLAGS}
 
-      cp ~/kube/default/* /etc/default/
-      cp ~/kube/init_conf/* /etc/init/
-      cp ~/kube/init_scripts/* /etc/init.d/
-
       groupadd -f -r kube-cert
       ${PROXY_SETTING} DEBUG='${DEBUG}' ~/kube/make-ca-cert.sh \"${MASTER_IP}\" \"${EXTRA_SANS}\"
       mkdir -p /opt/bin/
@@ -884,9 +880,6 @@ function provision-node() {
 
     sudo -E -p '[sudo] password to start node: ' -- /bin/bash -ce '
       ${BASH_DEBUG_FLAGS}
-      cp ~/kube/default/* /etc/default/
-      cp ~/kube/init_conf/* /etc/init/
-      cp ~/kube/init_scripts/* /etc/init.d/
       mkdir -p /opt/bin/
       cp ~/kube/minion/* /opt/bin
       ${SERVICE_STARTS}
@@ -985,9 +978,6 @@ function provision-masterandnode() {
 
     FLANNEL_OTHER_NET_CONFIG='${FLANNEL_OTHER_NET_CONFIG}' sudo -E -p '[sudo] password to start master: ' -- /bin/bash -ce '
       ${BASH_DEBUG_FLAGS}
-      cp ~/kube/default/* /etc/default/
-      cp ~/kube/init_conf/* /etc/init/
-      cp ~/kube/init_scripts/* /etc/init.d/
 
       groupadd -f -r kube-cert
       ${PROXY_SETTING} DEBUG='${DEBUG}' ~/kube/make-ca-cert.sh \"${MASTER_IP}\" \"${EXTRA_SANS}\"
