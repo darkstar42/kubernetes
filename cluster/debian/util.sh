@@ -595,8 +595,7 @@ function create-flanneld-opts() {
     cat <<EOF >/root/kube/cfg/flannel
 FLANNEL_ETCD="-etcd-endpoints=http://${ETCD_SERVERS}:4001"
 FLANNEL_ETCD_KEY="-etcd-prefix=/coreos.com/network"
-FLANNEL_IP_MASQ="--ip-masq"
-FLANNEL_INTERFACE="--iface=${FLANNEL_INTERFACE}""
+FLANNEL_INTERFACE="--iface=${FLANNEL_INTERFACE}"
 EOF
 
     cat <<EOF >/etc/systemd/system/flannel.service
@@ -608,7 +607,7 @@ Before=docker.service
 [Service]
 EnvironmentFile=-/root/kube/cfg/flannel
 ExecStartPre=/opt/kubernetes/bin/remove-docker0.sh
-ExecStart=/opt/kubernetes/bin/flanneld --ip-masq \${FLANNEL_ETCD} \${FLANNEL_ETCD_KEY}
+ExecStart=/opt/kubernetes/bin/flanneld --ip-masq \${FLANNEL_ETCD} \${FLANNEL_ETCD_KEY} \${FLANNEL_INTERFACE}
 ExecStartPost=/opt/kubernetes/bin/mk-docker-opts.sh -d /run/flannel/docker
 
 Type=notify
