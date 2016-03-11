@@ -605,12 +605,9 @@ After=network.target
 Before=docker.service
 
 [Service]
-EnvironmentFile=-/root/kube/cfg/flannel
-ExecStartPre=/opt/kubernetes/bin/remove-docker0.sh
-ExecStart=/opt/kubernetes/bin/flanneld --ip-masq \${FLANNEL_ETCD} \${FLANNEL_ETCD_KEY} \${FLANNEL_INTERFACE}
-ExecStartPost=/opt/kubernetes/bin/mk-docker-opts.sh -d /run/flannel/docker
-
 Type=notify
+EnvironmentFile=-/root/kube/cfg/flannel
+ExecStart=/opt/kubernetes/bin/flanneld --ip-masq \${FLANNEL_ETCD} \${FLANNEL_ETCD_KEY} \${FLANNEL_INTERFACE}
 
 [Install]
 WantedBy=multi-user.target
