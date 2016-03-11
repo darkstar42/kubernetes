@@ -216,7 +216,7 @@ function create-etcd-opts() {
     local etcd_data_dir=/var/lib/etcd/
     mkdir -p ${etcd_data_dir}
 
-    cat <<EOF >/opt/kubernetes/cfg/etcd.conf
+    cat <<EOF >/root/kube/cfg/etcd.conf
 # [member]
 ETCD_NAME=infra
 ETCD_DATA_DIR="${etcd_data_dir}/default.etcd"
@@ -262,7 +262,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=${etcd_data_dir}
-EnvironmentFile=-/opt/kubernetes/cfg/etcd.conf
+EnvironmentFile=-/root/kube/cfg/etcd.conf
 # set GOMAXPROCS to number of processors
 ExecStart=/bin/bash -c "GOMAXPROCS=\$(nproc) /opt/kubernetes/bin/etcd"
 
@@ -285,7 +285,7 @@ function create-kube-apiserver-opts() {
     local SERVICE_NODE_PORT_RANGE=${3}
     local ADVERTISE_ADDRESS=${4}
 
-    cat <<EOF >/opt/kubernetes/cfg/kube-apiserver
+    cat <<EOF >/root/kube/cfg/kube-apiserver
 # --logtostderr=true: log to standard error instead of files
 KUBE_LOGTOSTDERR="--logtostderr=true"
 
@@ -363,7 +363,7 @@ Description=Kubernetes API Server
 Documentation=https://github.com/kubernetes/kubernetes
 
 [Service]
-EnvironmentFile=-/opt/kubernetes/cfg/kube-apiserver
+EnvironmentFile=-/root/kube/cfg/kube-apiserver
 ExecStart=/opt/kubernetes/bin/kube-apiserver ${KUBE_APISERVER_OPTS}
 Restart=on-failure
 
@@ -379,7 +379,7 @@ EOF
 function create-kube-controller-manager-opts() {
     local MASTER_ADDRESS="127.0.0.1"
 
-    cat <<EOF >/opt/kubernetes/cfg/kube-controller-manager
+    cat <<EOF >/root/kube/cfg/kube-controller-manager
 KUBE_LOGTOSTDERR="--logtostderr=true"
 KUBE_LOG_LEVEL="--v=4"
 KUBE_MASTER="--master=${MASTER_ADDRESS}:8080"
@@ -405,7 +405,7 @@ Description=Kubernetes Controller Manager
 Documentation=https://github.com/kubernetes/kubernetes
 
 [Service]
-EnvironmentFile=-/opt/kubernetes/cfg/kube-controller-manager
+EnvironmentFile=-/root/kube/cfg/kube-controller-manager
 ExecStart=/opt/kubernetes/bin/kube-controller-manager ${KUBE_CONTROLLER_MANAGER_OPTS}
 Restart=on-failure
 
@@ -421,7 +421,7 @@ EOF
 function create-kube-scheduler-opts() {
     local MASTER_ADDRESS="127.0.0.1"
 
-    cat <<EOF >/opt/kubernetes/cfg/kube-scheduler
+    cat <<EOF >/root/kube/cfg/kube-scheduler
 ###
 # kubernetes scheduler config
 
@@ -449,7 +449,7 @@ Description=Kubernetes Scheduler
 Documentation=https://github.com/kubernetes/kubernetes
 
 [Service]
-EnvironmentFile=-/opt/kubernetes/cfg/kube-scheduler
+EnvironmentFile=-/root/kube/cfg/kube-scheduler
 ExecStart=/opt/kubernetes/bin/kube-scheduler ${KUBE_SCHEDULER_OPTS}
 Restart=on-failure
 
@@ -482,7 +482,7 @@ function create-kubelet-opts() {
       cni_opts=""
     fi
 
-    cat <<EOF >/opt/kubernetes/cfg/kubelet
+    cat <<EOF >/root/kube/cfg/kubelet
 # --logtostderr=true: log to standard error instead of files
 KUBE_LOGTOSTDERR="--logtostderr=true"
 
@@ -528,7 +528,7 @@ After=docker.service
 Requires=docker.service
 
 [Service]
-EnvironmentFile=-/opt/kubernetes/cfg/kubelet
+EnvironmentFile=-/root/kube/cfg/kubelet
 ExecStart=/opt/kubernetes/bin/kubelet ${KUBE_PROXY_OPTS}
 Restart=on-failure
 
@@ -547,7 +547,7 @@ function create-kube-proxy-opts() {
     local NODE_ADDRESS=${1}
     local MASTER_ADDRESS=${2}
 
-    cat <<EOF >/opt/kubernetes/cfg/kube-proxy
+    cat <<EOF >/root/kube/cfg/kube-proxy
 # --logtostderr=true: log to standard error instead of files
 KUBE_LOGTOSTDERR="--logtostderr=true"
 
@@ -572,7 +572,7 @@ Description=Kubernetes Proxy
 After=network.target
 
 [Service]
-EnvironmentFile=-/opt/kubernetes/cfg/kube-proxy
+EnvironmentFile=-/root/kube/cfg/kube-proxy
 ExecStart=/opt/kubernetes/bin/kube-proxy ${KUBE_PROXY_OPTS}
 Restart=on-failure
 
@@ -592,7 +592,7 @@ function create-flanneld-opts() {
     FLANNEL_INTERFACE=${2}
 
 
-    cat <<EOF >/opt/kubernetes/cfg/flannel
+    cat <<EOF >/root/kube/cfg/flannel
 FLANNEL_ETCD="-etcd-endpoints=http://${ETCD_SERVERS}:4001"
 FLANNEL_ETCD_KEY="-etcd-prefix=/coreos.com/network"
 FLANNEL_IP_MASQ="--ip-masq"
@@ -606,7 +606,7 @@ After=network.target
 Before=docker.service
 
 [Service]
-EnvironmentFile=-/opt/kubernetes/cfg/flannel
+EnvironmentFile=-/root/kube/cfg/flannel
 ExecStartPre=/opt/kubernetes/bin/remove-docker0.sh
 ExecStart=/opt/kubernetes/bin/flanneld --ip-masq \${FLANNEL_ETCD} \${FLANNEL_ETCD_KEY}
 ExecStartPost=/opt/kubernetes/bin/mk-docker-opts.sh -d /run/flannel/docker
@@ -743,6 +743,7 @@ function provision-master() {
   echo -e "\nDeploying master on machine ${MASTER_IP}"
 
   ssh $SSH_OPTS "$MASTER" "mkdir -p ~/kube/default"
+  ssh $SSH_OPTS "$MASTER" "mkdir -p /root/kube/cfg"
 
   # copy the binaries and scripts to the ~/kube directory on the master
   scp -r $SSH_OPTS \
@@ -820,6 +821,7 @@ function provision-node() {
   echo -e "\nDeploying node on machine ${1#*@}"
 
   ssh $SSH_OPTS $1 "mkdir -p ~/kube/default"
+  ssh $SSH_OPTS $1 "mkdir -p /root/kube/cfg"
 
   # copy the binaries and scripts to the ~/kube directory on the node
   scp -r $SSH_OPTS \
@@ -900,6 +902,7 @@ function provision-masterandnode() {
   echo -e "\nDeploying master and node on machine ${MASTER_IP}"
 
   ssh $SSH_OPTS $MASTER "mkdir -p ~/kube/default"
+  ssh $SSH_OPTS $MASTER "mkdir -p /root/kube/cfg"
 
   # copy the binaries and scripts to the ~/kube directory on the master
   # scp order matters
