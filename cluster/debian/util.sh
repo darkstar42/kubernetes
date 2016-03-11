@@ -213,12 +213,65 @@ function verify-node() {
 # Create ~/kube/default/etcd with proper contents.
 # $1: The one IP address where the etcd leader listens.
 function create-etcd-opts() {
-  cat <<EOF > ~/kube/default/etcd
-ETCD_OPTS="\
- -name infra\
- -listen-client-urls http://127.0.0.1:4001,http://${1}:4001\
- -advertise-client-urls http://${1}:4001"
+    local etcd_data_dir=/var/lib/etcd/
+    mkdir -p ${etcd_data_dir}
+
+    cat <<EOF >/opt/kubernetes/cfg/etcd.conf
+# [member]
+ETCD_NAME=infra
+ETCD_DATA_DIR="${etcd_data_dir}/default.etcd"
+#ETCD_SNAPSHOT_COUNTER="10000"
+#ETCD_HEARTBEAT_INTERVAL="100"
+#ETCD_ELECTION_TIMEOUT="1000"
+#ETCD_LISTEN_PEER_URLS="http://localhost:2380,http://localhost:7001"
+ETCD_LISTEN_CLIENT_URLS="http://127.0.0.1:4001,http://${1}:4001"
+#ETCD_MAX_SNAPSHOTS="5"
+#ETCD_MAX_WALS="5"
+#ETCD_CORS=""
+#
+#[cluster]
+#ETCD_INITIAL_ADVERTISE_PEER_URLS="http://localhost:2380,http://localhost:7001"
+# if you use different ETCD_NAME (e.g. test),
+# set ETCD_INITIAL_CLUSTER value for this name, i.e. "test=http://..."
+#ETCD_INITIAL_CLUSTER="default=http://localhost:2380,default=http://localhost:7001"
+#ETCD_INITIAL_CLUSTER_STATE="new"
+#ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
+ETCD_ADVERTISE_CLIENT_URLS="http://localhost:2379,http://localhost:4001,http://${1}:4001"
+#ETCD_DISCOVERY=""
+#ETCD_DISCOVERY_SRV=""
+#ETCD_DISCOVERY_FALLBACK="proxy"
+#ETCD_DISCOVERY_PROXY=""
+#
+#[proxy]
+#ETCD_PROXY="off"
+#
+#[security]
+#ETCD_CA_FILE=""
+#ETCD_CERT_FILE=""
+#ETCD_KEY_FILE=""
+#ETCD_PEER_CA_FILE=""
+#ETCD_PEER_CERT_FILE=""
+#ETCD_PEER_KEY_FILE=""
 EOF
+
+    cat <<EOF >/usr/lib/systemd/system/etcd.service
+[Unit]
+Description=Etcd Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=${etcd_data_dir}
+EnvironmentFile=-/opt/kubernetes/cfg/etcd.conf
+# set GOMAXPROCS to number of processors
+ExecStart=/bin/bash -c "GOMAXPROCS=\$(nproc) /opt/kubernetes/bin/etcd"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable etcd
 }
 
 # Create ~/kube/default/kube-apiserver with proper contents.
@@ -227,42 +280,185 @@ EOF
 # $3: A port range to reserve for services with NodePort visibility.
 # $4: The IP address on which to advertise the apiserver to members of the cluster.
 function create-kube-apiserver-opts() {
-  cat <<EOF > ~/kube/default/kube-apiserver
-KUBE_APISERVER_OPTS="\
- --insecure-bind-address=0.0.0.0\
- --insecure-port=8080\
- --etcd-servers=http://127.0.0.1:4001\
- --logtostderr=true\
- --service-cluster-ip-range=${1}\
- --admission-control=${2}\
- --service-node-port-range=${3}\
- --advertise-address=${4}\
- --client-ca-file=/srv/kubernetes/ca.crt\
- --tls-cert-file=/srv/kubernetes/server.cert\
- --tls-private-key-file=/srv/kubernetes/server.key"
+    local SERVICE_CLUSTER_IP_RANGE=${1}
+    local ADMISSION_CONTROL=${2}
+    local SERVICE_NODE_PORT_RANGE=${3}
+    local ADVERTISE_ADDRESS=${4}
+
+    cat <<EOF >/opt/kubernetes/cfg/kube-apiserver
+# --logtostderr=true: log to standard error instead of files
+KUBE_LOGTOSTDERR="--logtostderr=true"
+
+# --v=0: log level for V logs
+KUBE_LOG_LEVEL="--v=4"
+
+# --etcd-servers=[]: List of etcd servers to watch (http://ip:port),
+# comma separated. Mutually exclusive with -etcd-config
+KUBE_ETCD_SERVERS="--etcd-servers=http://127.0.0.1:4001"
+
+# --insecure-bind-address=127.0.0.1: The IP address on which to serve the --insecure-port.
+KUBE_API_ADDRESS="--insecure-bind-address=0.0.0.0"
+
+# --insecure-port=8080: The port on which to serve unsecured, unauthenticated access.
+KUBE_API_PORT="--insecure-port=8080"
+
+# --kubelet-port=10250: Kubelet port
+NODE_PORT="--kubelet-port=10250"
+
+# --advertise-address=<nil>: The IP address on which to advertise
+# the apiserver to members of the cluster.
+KUBE_ADVERTISE_ADDR="--advertise-address=${ADVERTISE_ADDRESS}"
+
+# --allow-privileged=false: If true, allow privileged containers.
+KUBE_ALLOW_PRIV="--allow-privileged=false"
+
+# --service-cluster-ip-range=<nil>: A CIDR notation IP range from which to assign service cluster IPs.
+# This must not overlap with any IP ranges assigned to nodes for pods.
+KUBE_SERVICE_ADDRESSES="--service-cluster-ip-range=${SERVICE_CLUSTER_IP_RANGE}"
+
+KUBE_SERVICE_NODE_PORT_RANGE="--service-node-port-range=${SERVICE_NODE_PORT_RANGE}"
+
+# --admission-control="AlwaysAdmit": Ordered list of plug-ins
+# to do admission control of resources into cluster.
+# Comma-delimited list of:
+#   LimitRanger, AlwaysDeny, SecurityContextDeny, NamespaceExists,
+#   NamespaceLifecycle, NamespaceAutoProvision,
+#   AlwaysAdmit, ServiceAccount, ResourceQuota
+KUBE_ADMISSION_CONTROL="--admission-control=${ADMISSION_CONTROL}"
+
+# --client-ca-file="": If set, any request presenting a client certificate signed
+# by one of the authorities in the client-ca-file is authenticated with an identity
+# corresponding to the CommonName of the client certificate.
+KUBE_API_CLIENT_CA_FILE="--client-ca-file=/srv/kubernetes/ca.crt"
+
+# --tls-cert-file="": File containing x509 Certificate for HTTPS.  (CA cert, if any,
+# concatenated after server cert). If HTTPS serving is enabled, and --tls-cert-file
+# and --tls-private-key-file are not provided, a self-signed certificate and key are
+# generated for the public address and saved to /var/run/kubernetes.
+KUBE_API_TLS_CERT_FILE="--tls-cert-file=/srv/kubernetes/server.cert"
+
+# --tls-private-key-file="": File containing x509 private key matching --tls-cert-file.
+KUBE_API_TLS_PRIVATE_KEY_FILE="--tls-private-key-file=/srv/kubernetes/server.key"
 EOF
+
+KUBE_APISERVER_OPTS="   \${KUBE_LOGTOSTDERR}             \\
+                        \${KUBE_LOG_LEVEL}               \\
+                        \${KUBE_ETCD_SERVERS}            \\
+                        \${KUBE_API_ADDRESS}             \\
+                        \${KUBE_API_PORT}                \\
+                        \${NODE_PORT}                    \\
+                        \${KUBE_ADVERTISE_ADDR}          \\
+                        \${KUBE_ALLOW_PRIV}              \\
+                        \${KUBE_SERVICE_ADDRESSES}       \\
+                        \${KUBE_SERVICE_NODE_PORT_RANGE} \\
+                        \${KUBE_ADMISSION_CONTROL}       \\
+                        \${KUBE_API_CLIENT_CA_FILE}      \\
+                        \${KUBE_API_TLS_CERT_FILE}       \\
+                        \${KUBE_API_TLS_PRIVATE_KEY_FILE}"
+
+
+cat <<EOF >/usr/lib/systemd/system/kube-apiserver.service
+[Unit]
+Description=Kubernetes API Server
+Documentation=https://github.com/kubernetes/kubernetes
+
+[Service]
+EnvironmentFile=-/opt/kubernetes/cfg/kube-apiserver
+ExecStart=/opt/kubernetes/bin/kube-apiserver ${KUBE_APISERVER_OPTS}
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable kube-apiserver
 }
 
 # Create ~/kube/default/kube-controller-manager with proper contents.
 function create-kube-controller-manager-opts() {
-  cat <<EOF > ~/kube/default/kube-controller-manager
-KUBE_CONTROLLER_MANAGER_OPTS="\
- --master=127.0.0.1:8080\
- --root-ca-file=/srv/kubernetes/ca.crt\
- --service-account-private-key-file=/srv/kubernetes/server.key\
- --logtostderr=true"
+    local MASTER_ADDRESS="127.0.0.1"
+
+    cat <<EOF >/opt/kubernetes/cfg/kube-controller-manager
+KUBE_LOGTOSTDERR="--logtostderr=true"
+KUBE_LOG_LEVEL="--v=4"
+KUBE_MASTER="--master=${MASTER_ADDRESS}:8080"
+
+# --root-ca-file="": If set, this root certificate authority will be included in
+# service account's token secret. This must be a valid PEM-encoded CA bundle.
+KUBE_CONTROLLER_MANAGER_ROOT_CA_FILE="--root-ca-file=/srv/kubernetes/ca.crt"
+
+# --service-account-private-key-file="": Filename containing a PEM-encoded private
+# RSA key used to sign service account tokens.
+KUBE_CONTROLLER_MANAGER_SERVICE_ACCOUNT_PRIVATE_KEY_FILE="--service-account-private-key-file=/srv/kubernetes/server.key"
 EOF
 
+    KUBE_CONTROLLER_MANAGER_OPTS="  \${KUBE_LOGTOSTDERR} \\
+                                    \${KUBE_LOG_LEVEL}   \\
+                                    \${KUBE_MASTER}      \\
+                                    \${KUBE_CONTROLLER_MANAGER_ROOT_CA_FILE} \\
+                                    \${KUBE_CONTROLLER_MANAGER_SERVICE_ACCOUNT_PRIVATE_KEY_FILE}"
+
+    cat <<EOF >/usr/lib/systemd/system/kube-controller-manager.service
+[Unit]
+Description=Kubernetes Controller Manager
+Documentation=https://github.com/kubernetes/kubernetes
+
+[Service]
+EnvironmentFile=-/opt/kubernetes/cfg/kube-controller-manager
+ExecStart=/opt/kubernetes/bin/kube-controller-manager ${KUBE_CONTROLLER_MANAGER_OPTS}
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable kube-controller-manager
 }
 
 # Create ~/kube/default/kube-scheduler with proper contents.
 function create-kube-scheduler-opts() {
-  cat <<EOF > ~/kube/default/kube-scheduler
-KUBE_SCHEDULER_OPTS="\
- --logtostderr=true\
- --master=127.0.0.1:8080"
+    local MASTER_ADDRESS="127.0.0.1"
+
+    cat <<EOF >/opt/kubernetes/cfg/kube-scheduler
+###
+# kubernetes scheduler config
+
+# --logtostderr=true: log to standard error instead of files
+KUBE_LOGTOSTDERR="--logtostderr=true"
+
+# --v=0: log level for V logs
+KUBE_LOG_LEVEL="--v=4"
+
+KUBE_MASTER="--master=${MASTER_ADDRESS}:8080"
+
+# Add your own!
+KUBE_SCHEDULER_ARGS=""
+
 EOF
 
+    KUBE_SCHEDULER_OPTS="   \${KUBE_LOGTOSTDERR}     \\
+                            \${KUBE_LOG_LEVEL}       \\
+                            \${KUBE_MASTER}          \\
+                            \${KUBE_SCHEDULER_ARGS}"
+
+    cat <<EOF >/usr/lib/systemd/system/kube-scheduler.service
+[Unit]
+Description=Kubernetes Scheduler
+Documentation=https://github.com/kubernetes/kubernetes
+
+[Service]
+EnvironmentFile=-/opt/kubernetes/cfg/kube-scheduler
+ExecStart=/opt/kubernetes/bin/kube-scheduler ${KUBE_SCHEDULER_OPTS}
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable kube-scheduler
 }
 
 # Create ~/kube/default/kubelet with proper contents.
@@ -273,45 +469,179 @@ EOF
 # $5: Pathname of the kubelet config file or directory.
 # $6: If empty then flannel is used otherwise CNI is used.
 function create-kubelet-opts() {
-  if [ -n "$6" ] ; then
+    local NODE_ADDRESS=${1}
+    local MASTER_ADDRESS=${2}
+    local CLUSTER_DNS=${3}
+    local CLUSTER_DOMAIN=${4}
+
+    # TODO $5?
+
+    if [ -n "$6" ] ; then
       cni_opts=" --network-plugin=cni --network-plugin-dir=/etc/cni/net.d"
-  else
+    else
       cni_opts=""
-  fi
-  cat <<EOF > ~/kube/default/kubelet
-KUBELET_OPTS="\
- --hostname-override=${1} \
- --api-servers=http://${2}:8080 \
- --logtostderr=true \
- --cluster-dns=${3} \
- --cluster-domain=${4} \
- --config=${5} \
- $cni_opts"
+    fi
+
+    cat <<EOF >/opt/kubernetes/cfg/kubelet
+# --logtostderr=true: log to standard error instead of files
+KUBE_LOGTOSTDERR="--logtostderr=true"
+
+#  --v=0: log level for V logs
+KUBE_LOG_LEVEL="--v=4"
+
+# --address=0.0.0.0: The IP address for the Kubelet to serve on (set to 0.0.0.0 for all interfaces)
+NODE_ADDRESS="--address=${NODE_ADDRESS}"
+
+# --port=10250: The port for the Kubelet to serve on. Note that "kubectl logs" will not work if you set this flag.
+NODE_PORT="--port=10250"
+
+# --hostname-override="": If non-empty, will use this string as identification instead of the actual hostname.
+NODE_HOSTNAME="--hostname-override=${NODE_ADDRESS}"
+
+# --api-servers=[]: List of Kubernetes API servers for publishing events,
+# and reading pods and services. (ip:port), comma separated.
+KUBELET_API_SERVER="--api-servers=${MASTER_ADDRESS}:8080"
+
+# --allow-privileged=false: If true, allow containers to request privileged mode. [default=false]
+KUBE_ALLOW_PRIV="--allow-privileged=false"
+
+KUBELET_CLUSTER_DNS="--cluster-dns=${CLUSTER_DNS}"
+KUBELET_CLUSTER_DOMAIN="--cluster-domain=${CLUSTER_DOMAIN}"
+
+# Add your own!
+KUBELET_ARGS="${cni_opts}"
 EOF
+
+    KUBE_PROXY_OPTS="   \${KUBE_LOGTOSTDERR}     \\
+                        \${KUBE_LOG_LEVEL}       \\
+                        \${NODE_ADDRESS}         \\
+                        \${NODE_PORT}            \\
+                        \${NODE_HOSTNAME}        \\
+                        \${KUBELET_API_SERVER}   \\
+                        \${KUBE_ALLOW_PRIV}      \\
+                        \${KUBELET_ARGS}"
+
+    cat <<EOF >/usr/lib/systemd/system/kubelet.service
+[Unit]
+Description=Kubernetes Kubelet
+After=docker.service
+Requires=docker.service
+
+[Service]
+EnvironmentFile=-/opt/kubernetes/cfg/kubelet
+ExecStart=/opt/kubernetes/bin/kubelet ${KUBE_PROXY_OPTS}
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable kubelet
 }
 
 # Create ~/kube/default/kube-proxy with proper contents.
 # $1: The hostname or IP address by which the node is identified.
 # $2: The one hostname or IP address at which the API server is reached (insecurely).
 function create-kube-proxy-opts() {
-  cat <<EOF > ~/kube/default/kube-proxy
-KUBE_PROXY_OPTS="\
- --hostname-override=${1} \
- --master=http://${2}:8080 \
- --logtostderr=true \
- ${3}"
+    local NODE_ADDRESS=${1}
+    local MASTER_ADDRESS=${2}
+
+    cat <<EOF >/opt/kubernetes/cfg/kube-proxy
+# --logtostderr=true: log to standard error instead of files
+KUBE_LOGTOSTDERR="--logtostderr=true"
+
+#  --v=0: log level for V logs
+KUBE_LOG_LEVEL="--v=4"
+
+# --hostname-override="": If non-empty, will use this string as identification instead of the actual hostname.
+NODE_HOSTNAME="--hostname-override=${NODE_ADDRESS}"
+
+# --master="": The address of the Kubernetes API server (overrides any value in kubeconfig)
+KUBE_MASTER="--master=http://${MASTER_ADDRESS}:8080"
 EOF
 
+    KUBE_PROXY_OPTS="   \${KUBE_LOGTOSTDERR} \\
+                        \${KUBE_LOG_LEVEL}   \\
+                        \${NODE_HOSTNAME}    \\
+                        \${KUBE_MASTER}"
+
+    cat <<EOF >/usr/lib/systemd/system/kube-proxy.service
+[Unit]
+Description=Kubernetes Proxy
+After=network.target
+
+[Service]
+EnvironmentFile=-/opt/kubernetes/cfg/kube-proxy
+ExecStart=/opt/kubernetes/bin/kube-proxy ${KUBE_PROXY_OPTS}
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable kube-proxy
 }
 
 # Create ~/kube/default/flanneld with proper contents.
 # $1: The one hostname or IP address at which the etcd leader listens.
 function create-flanneld-opts() {
-  cat <<EOF > ~/kube/default/flanneld
-FLANNEL_OPTS="--etcd-endpoints=http://${1}:4001 \
- --ip-masq \
- --iface=${2}"
+    ETCD_SERVERS=${1}
+    #FLANNEL_NET=${2:-"172.16.0.0/16"}
+    FLANNEL_INTERFACE=${2}
+
+
+    cat <<EOF >/opt/kubernetes/cfg/flannel
+FLANNEL_ETCD="-etcd-endpoints=http://${ETCD_SERVERS}:4001"
+FLANNEL_ETCD_KEY="-etcd-prefix=/coreos.com/network"
+FLANNEL_IP_MASQ="--ip-masq"
+FLANNEL_INTERFACE="--iface=${FLANNEL_INTERFACE}""
 EOF
+
+    cat <<EOF >/usr/lib/systemd/system/flannel.service
+[Unit]
+Description=Flanneld overlay address etcd agent
+After=network.target
+Before=docker.service
+
+[Service]
+EnvironmentFile=-/opt/kubernetes/cfg/flannel
+ExecStartPre=/opt/kubernetes/bin/remove-docker0.sh
+ExecStart=/opt/kubernetes/bin/flanneld --ip-masq \${FLANNEL_ETCD} \${FLANNEL_ETCD_KEY}
+ExecStartPost=/opt/kubernetes/bin/mk-docker-opts.sh -d /run/flannel/docker
+
+Type=notify
+
+[Install]
+WantedBy=multi-user.target
+RequiredBy=docker.service
+EOF
+
+
+# TODO?
+# Store FLANNEL_NET to etcd.
+#attempt=0
+#while true; do
+#  /opt/kubernetes/bin/etcdctl --no-sync -C ${ETCD_SERVERS} \
+#    get /coreos.com/network/config >/dev/null 2>&1
+#  if [[ "$?" == 0 ]]; then
+#    break
+#  else
+#    if (( attempt > 600 )); then
+#      echo "timeout for waiting network config" > ~/kube/err.log
+#      exit 2
+#    fi
+#
+#    /opt/kubernetes/bin/etcdctl --no-sync -C ${ETCD_SERVERS} \
+#      mk /coreos.com/network/config "{\"Network\":\"${FLANNEL_NET}\"}" >/dev/null 2>&1
+#    attempt=$((attempt+1))
+#    sleep 3
+#  fi
+#done
+#wait
+
+    systemctl daemon-reload
 }
 
 # Detect the IP for the master
@@ -524,7 +854,7 @@ function provision-node() {
                     service kube-proxy start'
     NEED_RECONFIG_DOCKER=false
   fi
-  
+
   BASH_DEBUG_FLAGS=""
   if [[ "$DEBUG" == "true" ]] ; then
     BASH_DEBUG_FLAGS="set -x"
@@ -550,7 +880,7 @@ function provision-node() {
       '${KUBE_PROXY_EXTRA_OPTS}'
     create-flanneld-opts '${MASTER_IP}' '${1#*@}'
 
-    sudo -E -p '[sudo] password to start node: ' -- /bin/bash -ce '    
+    sudo -E -p '[sudo] password to start node: ' -- /bin/bash -ce '
       ${BASH_DEBUG_FLAGS}
       cp ~/kube/default/* /etc/default/
       cp ~/kube/init_conf/* /etc/init/
@@ -605,7 +935,7 @@ function provision-masterandnode() {
         "'
     NEED_RECONFIG_DOCKER=false
   fi
-  
+
   EXTRA_SANS=(
     IP:${MASTER_IP}
     IP:${SERVICE_CLUSTER_IP_RANGE%.*}.1
@@ -650,7 +980,7 @@ function provision-masterandnode() {
       '${KUBE_PROXY_EXTRA_OPTS}'
     create-flanneld-opts '127.0.0.1' '${MASTER_IP}'
 
-    FLANNEL_OTHER_NET_CONFIG='${FLANNEL_OTHER_NET_CONFIG}' sudo -E -p '[sudo] password to start master: ' -- /bin/bash -ce ' 
+    FLANNEL_OTHER_NET_CONFIG='${FLANNEL_OTHER_NET_CONFIG}' sudo -E -p '[sudo] password to start master: ' -- /bin/bash -ce '
       ${BASH_DEBUG_FLAGS}
       cp ~/kube/default/* /etc/default/
       cp ~/kube/init_conf/* /etc/init/
@@ -687,7 +1017,7 @@ function check-pods-torn-down() {
 # Delete a kubernetes cluster
 function kube-down() {
   export KUBECTL_PATH="${KUBE_ROOT}/cluster/debian/binaries/kubectl"
-  
+
   export KUBE_CONFIG_FILE=${KUBE_CONFIG_FILE:-${KUBE_ROOT}/cluster/debian/config-default.sh}
   source "${KUBE_CONFIG_FILE}"
 
