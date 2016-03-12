@@ -48,8 +48,8 @@ function deploy_dns {
       
   if [ ! "$KUBEDNS" ]; then
     # use kubectl to create skydns rc and service
-    ${KUBECTL} --namespace=kube-system create -f skydns-rc.yaml 
-    ${KUBECTL} --namespace=kube-system create -f skydns-svc.yaml
+    ${KUBECTL} --namespace=kube-system create -f skydns-rc.yaml --validate=false
+    ${KUBECTL} --namespace=kube-system create -f skydns-svc.yaml --validate=false
 
     echo "Kube-dns rc and service is successfully deployed."
   else
