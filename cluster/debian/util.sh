@@ -272,7 +272,6 @@ EOF
 
     systemctl daemon-reload
     systemctl enable etcd
-    systemctl start etcd
 }
 
 # Create ~/kube/default/kube-apiserver with proper contents.
@@ -374,7 +373,6 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kube-apiserver
-    systemctl start kube-apiserver
 }
 
 # Create ~/kube/default/kube-controller-manager with proper contents.
@@ -417,7 +415,6 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kube-controller-manager
-    systemctl start kube-controller-manager
 }
 
 # Create ~/kube/default/kube-scheduler with proper contents.
@@ -462,7 +459,6 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kube-scheduler
-    systemctl start kube-scheduler
 }
 
 # Create ~/kube/default/kubelet with proper contents.
@@ -542,7 +538,6 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kubelet
-    systemctl start kubelet
 }
 
 # Create ~/kube/default/kube-proxy with proper contents.
@@ -587,7 +582,6 @@ EOF
 
     systemctl daemon-reload
     systemctl enable kube-proxy
-    systemctl start kube-proxy
 }
 
 # Create ~/kube/default/flanneld with proper contents.
@@ -806,7 +800,7 @@ function provision-master() {
       ${PROXY_SETTING} DEBUG='${DEBUG}' ~/kube/make-ca-cert.sh \"${MASTER_IP}\" \"${EXTRA_SANS}\"
       mkdir -p /opt/kubernetes/bin/
       cp ~/kube/master/* /opt/kubernetes/bin/
-      service etcd start
+      systemctl start etcd
       if ${NEED_RECONFIG_DOCKER}; then FLANNEL_NET=\"${FLANNEL_NET}\" KUBE_CONFIG_FILE=\"${KUBE_CONFIG_FILE}\" DOCKER_OPTS=\"${DOCKER_OPTS}\" ~/kube/reconfDocker.sh a; fi
       '" || {
       echo "Deploying master on machine ${MASTER_IP} failed"
@@ -833,7 +827,7 @@ function provision-node() {
   if [ -z "$CNI_PLUGIN_CONF" ] || [ -z "$CNI_PLUGIN_EXES" ]; then
     # Prep for Flannel use: copy the flannel binaries and scripts, set reconf flag
     scp -r $SSH_OPTS debian/minion-flannel/* "${1}:~/kube"
-    SERVICE_STARTS="service flanneld start"
+    SERVICE_STARTS="systemctl start flanneld"
     NEED_RECONFIG_DOCKER=true
     CNI_PLUGIN_CONF=''
 
@@ -850,8 +844,8 @@ function provision-node() {
         '"sed -i.bak -e 's/start on started flanneld/start on started ${CNI_KUBELET_TRIGGER}/' -e 's/stop on stopping flanneld/stop on stopping ${CNI_KUBELET_TRIGGER}/' "'~$(id -un)/kube/init_conf/kubelet.conf
         '"sed -i.bak -e 's/start on started flanneld/start on started networking/' -e 's/stop on stopping flanneld/stop on stopping networking/' "'~$(id -un)/kube/init_conf/kube-proxy.conf
         "'
-    SERVICE_STARTS='service kubelet    start
-                    service kube-proxy start'
+    SERVICE_STARTS='systemctl start kubelet
+                    systemctl start kube-proxy'
     NEED_RECONFIG_DOCKER=false
   fi
 
@@ -987,7 +981,7 @@ function provision-masterandnode() {
       cp ~/kube/master/* /opt/kubernetes/bin/
       cp ~/kube/minion/* /opt/kubernetes/bin/
 
-      service etcd start
+      systemctl start etcd
       if ${NEED_RECONFIG_DOCKER}; then FLANNEL_NET=\"${FLANNEL_NET}\" KUBE_CONFIG_FILE=\"${KUBE_CONFIG_FILE}\" DOCKER_OPTS=\"${DOCKER_OPTS}\" ~/kube/reconfDocker.sh ai; fi
       '" || {
       echo "Deploying master and node on machine ${MASTER_IP} failed"
